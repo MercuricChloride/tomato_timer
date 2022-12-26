@@ -14,6 +14,7 @@ pub struct TemplateApp {
     #[serde(skip)]
     round_started: bool,
 
+    #[serde(skip)]
     notified: bool,
 }
 
@@ -81,14 +82,15 @@ impl eframe::App for TemplateApp {
                 })
                 .clicked()
             {
-                *round_started = !*round_started;
-
                 let round_time = Duration::from_secs_f32(*time_per_round);
+
+                *round_started = !*round_started;
 
                 if *round_started {
                     *finish_time = Some(current_time + round_time);
                 } else {
                     *finish_time = None;
+                    *notified = false;
                 }
             }
 
