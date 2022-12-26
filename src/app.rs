@@ -1,35 +1,29 @@
+use std::time::{Duration, SystemTime};
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     // Example stuff:
-    label: String,
     #[serde(skip)]
-    tasks: Vec<Task>,
-    fullscreen: bool,
-
-    // this how you opt-out of serialization of a member
-    #[serde(skip)]
-    value: f32,
+    time_per_round: f32,
 
     #[serde(skip)]
-    sort_by_importance: bool,
-}
+    finish_time: Option<SystemTime>,
 
-struct Task {
-    label: String,
-    importance: f32,
+    #[serde(skip)]
+    round_started: bool,
+
+    notified: bool,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            tasks: vec![],
-            value: 1.0,
-            fullscreen: false,
-            sort_by_importance: false,
+            time_per_round: 0.0,
+            finish_time: None,
+            round_started: false,
+            notified: false,
         }
     }
 }
@@ -60,69 +54,58 @@ impl eframe::App for TemplateApp {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self {
-            label,
-            value,
-            tasks,
-            fullscreen,
-            sort_by_importance,
+            time_per_round,
+            finish_time,
+            round_started,
+            notified,
         } = self;
 
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+        _frame.set_window_size(egui::Vec2::new(300.0, 500.0));
+        ctx.set_pixels_per_point(3.0);
 
-        #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        _frame.close();
-                    }
-                });
-                ui.menu_button("View", |ui| {
-                    if ui.button("Toggle Fullscreen").clicked() {
-                        *fullscreen = !*fullscreen;
-                        _frame.set_fullscreen(*fullscreen);
-                    }
-                });
-            });
-        });
-
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Add a task");
-
-            ui.text_edit_singleline(label);
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("Importance"));
-
-            if ui.button("Add Task").clicked() {
-                tasks.push(Task {
-                    label: label.to_owned(),
-                    importance: *value,
-                });
-                *label = "".to_owned();
-            }
-        });
-
+        // main window
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Area::new("Left").show(&ctx, |ui| {
-                ui.label("Left");
-            });
-            egui::Area::new("Right").show(&ctx, |ui| {
-                ui.label("Right");
-            });
+            ui.heading("Task Timer");
 
             ui.separator();
 
-            for task in tasks {
-                ui.horizontal(|ui| {
-                    ui.label(task.label.to_owned());
-                    ui.label(task.importance.to_string());
-                });
-                ui.separator();
+            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Seconds per round"));
+
+            let current_time = SystemTime::now();
+
+            if ui
+                .button(if *round_started {
+                    "Stop Round"
+                } else {
+                    "Start Round"
+                })
+                .clicked()
+            {
+                *round_started = !*round_started;
+
+                let round_time = Duration::from_secs_f32(*time_per_round);
+
+                if *round_started {
+                    *finish_time = Some(current_time + round_time);
+                } else {
+                    *finish_time = None;
+                }
             }
+
+            ui.heading(if let Some(finish_time) = finish_time {
+                let remaining_time = finish_time.duration_since(current_time);
+                if let Ok(remaining_time) = remaining_time {
+                    format!("Time remaining: {}", remaining_time.as_secs())
+                } else {
+                    if !*notified {
+                        *notified = true;
+                        notifica::notify("Timer Up!", "Take a quick break :)").unwrap();
+                    }
+                    "Time is up!".to_string()
+                }
+            } else {
+                "No Clock Started".to_string()
+            });
         });
     }
 }
