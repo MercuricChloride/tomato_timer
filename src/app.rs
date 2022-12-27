@@ -8,16 +8,14 @@ use crate::sounds::{finish_sound, start_sound};
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-
 pub struct TemplateApp {
-    #[serde(skip)]
-    timer: Timer,
-}
-
-struct Timer {
+    // #[serde(skip)]
+    // timer: Timer,
     time_per_round: f32,
     time_per_break: f32,
     start_time: SystemTime,
+    total_time: u128, // total time logged in the app
+    #[serde(skip)]
     status: Option<TimerStatus>,
 }
 
@@ -31,12 +29,11 @@ enum TimerStatus {
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            timer: Timer {
-                time_per_round: 25.0,
-                time_per_break: 5.0,
-                start_time: SystemTime::now(),
-                status: Some(TimerStatus::Stopped),
-            },
+            time_per_round: 25.0,
+            time_per_break: 5.0,
+            total_time: 0,
+            start_time: SystemTime::now(),
+            status: Some(TimerStatus::Stopped),
         }
     }
 }
@@ -94,16 +91,14 @@ impl eframe::App for TemplateApp {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self {
-            timer:
-                Timer {
-                    time_per_round,
-                    time_per_break,
-                    start_time,
-                    status,
-                },
+            time_per_round,
+            time_per_break,
+            total_time,
+            start_time,
+            status,
         } = self;
 
-        ctx.request_repaint_after(Duration::from_millis(10)); // request a repaint every second
+        ctx.request_repaint_after(Duration::from_millis(10)); // request a repaint every 10 ms
 
         // main window
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -111,8 +106,8 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
-            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Minutes per round"));
-            ui.add(egui::Slider::new(time_per_break, 0.0..=60.0).text("Minutes per break"));
+            ui.add(egui::Slider::new(time_per_round, 1.0..=60.0).text("Minutes per round"));
+            ui.add(egui::Slider::new(time_per_break, 1.0..=60.0).text("Minutes per break"));
 
             let current_time = SystemTime::now();
 
@@ -121,9 +116,11 @@ impl eframe::App for TemplateApp {
                     .duration_since(*start_time)
                     .unwrap()
                     .as_secs_f32(),
+
                 Some(TimerStatus::Break(start)) => {
                     current_time.duration_since(*start).unwrap().as_secs_f32()
                 }
+
                 _ => 0.0,
             };
 
@@ -141,18 +138,14 @@ impl eframe::App for TemplateApp {
             };
 
             // main timer logic and actions
-            // if we're running, show the progress bar
             match status {
+                // if we have time remaining in the round, show the timer
+                // if we have no time remaining, show a notification, play a sound, and switch to break mode
                 Some(TimerStatus::Running) => {
                     if remaining_time > 0.0 {
                         ui.horizontal(|ui| {
-                            // ui.add(egui::ProgressBar::new(remaining_time / *time_per_round));
                             ui.add(egui::ProgressBar::new(
                                 remaining_time / (*time_per_round * 60.0),
-                            ));
-                            ui.label(format!(
-                                "{}",
-                                Duration::from_secs_f32(remaining_time).as_secs()
                             ));
                         });
                     } else {
@@ -160,19 +153,18 @@ impl eframe::App for TemplateApp {
                         thread::spawn(|| {
                             finish_sound();
                         });
-                        *status = Some(TimerStatus::Break(current_time)); // reset timer so we don't spam notifications
-                        ui.add(egui::ProgressBar::new(0.0));
+                        *total_time += elapsed_time as u128; // add the elapsed work time to the total working time
+                        *status = Some(TimerStatus::Break(current_time));
                     }
                 }
+
+                // if we have time remaining in the break, show the timer
+                // otherwise, switch to work mode
                 Some(TimerStatus::Break(_)) => {
                     if remaining_time > 0.0 {
                         ui.horizontal(|ui| {
                             ui.add(egui::ProgressBar::new(
                                 remaining_time / (*time_per_break * 60.0),
-                            ));
-                            ui.label(format!(
-                                "Seconds left in break: {}",
-                                Duration::from_secs_f32(remaining_time).as_secs()
                             ));
                         });
                     } else {
@@ -180,38 +172,30 @@ impl eframe::App for TemplateApp {
                         thread::spawn(|| {
                             start_sound();
                         });
-                        *status = Some(TimerStatus::Running); // reset timer so we don't spam notifications
-                        ui.add(egui::ProgressBar::new(0.0));
+                        *status = Some(TimerStatus::Running);
                     }
                 }
-                _ => {}
+
+                _ => {} // do nothing if we're stopped
             }
 
             // time remaining label
-            ui.heading(
-                //rustfmt::skip
-                if remaining_time > 60.0 {
-                    format!(
-                        "{} Minutes left in round",
-                        (Duration::from_secs_f32(remaining_time).as_secs() / 60) + 1
-                    )
-                } else if remaining_time > 0.0 {
-                    format!(
-                        "{} Seconds left in round",
-                        Duration::from_secs_f32(remaining_time).as_secs()
-                    )
-                } else {
-                    "Time is up!".to_owned()
-                },
-            );
+            ui.heading(match remaining_time as u32 {
+                60..=u32::MAX => format!(
+                    "{} Minutes left in round",
+                    (Duration::from_secs_f32(remaining_time).as_secs() / 60) + 1
+                ),
+                1..=59 => format!(
+                    "{} Seconds left in round",
+                    Duration::from_secs_f32(remaining_time).as_secs()
+                ),
+                _ => "Time is up!".to_owned(),
+            });
 
             // start / stop button
             if ui.button(button_text).clicked() {
                 match status {
                     Some(TimerStatus::Stopped) => {
-                        if time_per_round == &0.0 {
-                            return;
-                        }
                         *start_time = current_time;
                         *status = Some(TimerStatus::Running);
                         thread::spawn(|| {
@@ -223,7 +207,11 @@ impl eframe::App for TemplateApp {
                     }
                 }
             }
-            ui.heading(format!("{:?}", status));
+
+            ui.heading(&format!(
+                "You have spent a total of {} minutes working, keep going!",
+                Duration::from_secs(*total_time as u64).as_secs_f32() / 60.0
+            ));
         });
     }
 }
