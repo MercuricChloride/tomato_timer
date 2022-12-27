@@ -1,5 +1,5 @@
 use rodio::source::{SineWave, Source};
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{OutputStream, Sink};
 use std::time::Duration;
 
 pub fn finish_sound() {
@@ -13,12 +13,11 @@ pub fn finish_sound() {
         .take_duration(Duration::from_secs_f32(0.25))
         .amplify(0.20);
 
-    sink.append(beep.clone());
-    sink.append(pause.clone());
-    sink.append(beep.clone());
-    sink.append(pause.clone());
-    sink.append(beep.clone());
-    sink.append(pause.clone());
+    for _ in 0..3 {
+        sink.append(beep.clone());
+        sink.append(pause.clone());
+    }
+
     sink.sleep_until_end();
 }
 

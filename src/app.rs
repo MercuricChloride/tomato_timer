@@ -106,26 +106,24 @@ impl eframe::App for TemplateApp {
             };
 
             // main timer logic and actions
-            match status {
-                Some(TimerStatus::Running) => {
-                    if remaining_time > 0.0 {
-                        ui.horizontal(|ui| {
-                            ui.add(egui::ProgressBar::new(remaining_time / *time_per_round));
-                            ui.label(format!(
-                                "{}",
-                                Duration::from_secs_f32(remaining_time).as_secs()
-                            ));
-                        });
-                    } else {
-                        notifica::notify("Time is up!", "Take a break").unwrap();
-                        thread::spawn(|| {
-                            finish_sound();
-                        });
-                        *status = Some(TimerStatus::Stopped); // reset timer so we don't spam notifications
-                        ui.add(egui::ProgressBar::new(0.0));
-                    }
+            // if we're running, show the progress bar
+            if let Some(TimerStatus::Running) = status {
+                if remaining_time > 0.0 {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::ProgressBar::new(remaining_time / *time_per_round));
+                        ui.label(format!(
+                            "{}",
+                            Duration::from_secs_f32(remaining_time).as_secs()
+                        ));
+                    });
+                } else {
+                    notifica::notify("Time is up!", "Take a break").unwrap();
+                    thread::spawn(|| {
+                        finish_sound();
+                    });
+                    *status = Some(TimerStatus::Stopped); // reset timer so we don't spam notifications
+                    ui.add(egui::ProgressBar::new(0.0));
                 }
-                _ => {}
             }
 
             // time remaining label
@@ -143,22 +141,20 @@ impl eframe::App for TemplateApp {
 
             // start / stop button
             if ui.button(button_text).clicked() {
-                if let Some(status) = status {
-                    if let TimerStatus::Stopped = status {
+                match status {
+                    Some(TimerStatus::Stopped) => {
+                        if time_per_round == &0.0 {
+                            return;
+                        }
                         *start_time = current_time;
-                        *status = TimerStatus::Running;
+                        *status = Some(TimerStatus::Running);
                         thread::spawn(|| {
                             start_sound();
                         });
-                    } else {
-                        *status = TimerStatus::Stopped;
                     }
-                } else {
-                    *start_time = current_time;
-                    *status = Some(TimerStatus::Running);
-                    thread::spawn(|| {
-                        start_sound();
-                    });
+                    _ => {
+                        *status = Some(TimerStatus::Stopped);
+                    }
                 }
             }
         });
