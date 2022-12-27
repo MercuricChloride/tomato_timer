@@ -9,9 +9,9 @@ fn main() {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "eframe template",
+        "Tomato Timer",
         native_options,
-        Box::new(|cc| Box::new(eframe_test::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(tomato_timer::TemplateApp::new(cc))),
     );
 }
 

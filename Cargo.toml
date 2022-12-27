@@ -1,5 +1,5 @@
 [package]
-name = "eframe_test"
+name = "tomato_timer"
 version = "0.1.0"
 authors = ["Alexander Gusev<alexandergusev46@gmail.com>"]
 edition = "2021"
