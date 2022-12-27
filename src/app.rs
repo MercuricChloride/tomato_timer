@@ -1,8 +1,14 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    thread,
+    time::{Duration, SystemTime},
+};
+
+use crate::sounds::{finish_sound, start_sound};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
+
 pub struct TemplateApp {
     #[serde(skip)]
     timer: Timer,
@@ -99,6 +105,7 @@ impl eframe::App for TemplateApp {
                 _ => None,
             };
 
+            // main timer logic and actions
             match status {
                 Some(TimerStatus::Running) => {
                     if remaining_time > 0.0 {
@@ -111,6 +118,9 @@ impl eframe::App for TemplateApp {
                         });
                     } else {
                         notifica::notify("Time is up!", "Take a break").unwrap();
+                        thread::spawn(|| {
+                            finish_sound();
+                        });
                         *status = Some(TimerStatus::Stopped); // reset timer so we don't spam notifications
                         ui.add(egui::ProgressBar::new(0.0));
                     }
@@ -137,12 +147,18 @@ impl eframe::App for TemplateApp {
                     if let TimerStatus::Stopped = status {
                         *start_time = current_time;
                         *status = TimerStatus::Running;
+                        thread::spawn(|| {
+                            start_sound();
+                        });
                     } else {
                         *status = TimerStatus::Stopped;
                     }
                 } else {
                     *start_time = current_time;
                     *status = Some(TimerStatus::Running);
+                    thread::spawn(|| {
+                        start_sound();
+                    });
                 }
             }
         });

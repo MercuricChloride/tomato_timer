@@ -15,7 +15,9 @@ eframe = { version = "0.20.0", default-features = false, features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 
-notifica = "3.0.2"
+notifica = "3.0.2" # for push notifications
+
+rodio = "0.16.0" # for audio
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
