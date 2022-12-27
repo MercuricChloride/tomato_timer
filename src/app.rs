@@ -23,6 +23,7 @@ struct Timer {
 #[derive(Debug)]
 enum TimerStatus {
     Running,
+    Break,
     Stopped,
 }
 
@@ -44,6 +45,32 @@ impl TemplateApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         cc.egui_ctx.set_pixels_per_point(3.0);
+
+        // custom styling
+        let mut style: egui::Style = (*cc.egui_ctx.style()).clone();
+        // style.spacing.item_spacing = egui::vec2(10.0, 20.0);
+        style.visuals.panel_fill = egui::Color32::from_rgb(5, 130, 202);
+
+        style.visuals.widgets = egui::style::Widgets {
+            noninteractive: egui::style::WidgetVisuals {
+                bg_fill: egui::Color32::from_rgb(0, 100, 148),
+                bg_stroke: egui::Stroke::new(1.0, egui::Color32::BLACK),
+                rounding: egui::Rounding::default(),
+                fg_stroke: egui::Stroke::new(3.0, egui::Color32::BLACK),
+                expansion: 0.0,
+            },
+            inactive: egui::style::WidgetVisuals {
+                bg_fill: egui::Color32::from_rgb(0, 53, 84),
+                bg_stroke: egui::Stroke::new(1.0, egui::Color32::BLACK),
+                rounding: egui::Rounding::default(),
+                fg_stroke: egui::Stroke::new(1.0, egui::Color32::WHITE),
+                expansion: 0.0,
+            },
+            ..Default::default()
+        };
+
+        //212, 193, 236
+        cc.egui_ctx.set_style(style);
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
@@ -81,17 +108,16 @@ impl eframe::App for TemplateApp {
 
             ui.separator();
 
-            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Seconds per round"));
+            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Minutes per round"));
 
             let current_time = SystemTime::now();
 
             let elapsed_time = current_time.duration_since(*start_time).unwrap();
-            let remaining_time = *time_per_round - elapsed_time.as_secs_f32();
+            let remaining_time = (*time_per_round * 60.0) - elapsed_time.as_secs_f32();
 
             let button_text = match status {
-                Some(TimerStatus::Running) => "Stop Round",
-                Some(TimerStatus::Stopped) => "Start Round",
-                None => "Start Round",
+                Some(TimerStatus::Running | TimerStatus::Break) => "Stop Round",
+                _ => "Start Round",
             };
 
             let time_remaining = match status {
@@ -132,7 +158,7 @@ impl eframe::App for TemplateApp {
                 if let Some(remaining_time) = time_remaining {
                     format!(
                         "Time remaining: {}",
-                        Duration::from_secs_f32(remaining_time).as_secs()
+                        Duration::from_secs_f32(remaining_time).as_secs() / 60
                     )
                 } else {
                     "Time is up!".to_owned()
