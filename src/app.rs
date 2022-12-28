@@ -49,7 +49,7 @@ impl TemplateApp {
         // custom styling
         let mut style: egui::Style = (*cc.egui_ctx.style()).clone();
 
-        style.visuals.override_text_color = Some(egui::Color32::BLACK);
+        style.visuals.override_text_color = Some(egui::Color32::WHITE);
         // style.visuals.panel_fill = green;
 
         cc.egui_ctx.set_style(style);
@@ -190,7 +190,7 @@ impl eframe::App for TemplateApp {
                     "{} Seconds left in round",
                     Duration::from_secs_f32(remaining_time).as_secs()
                 ),
-                _ => "Time is up!".to_owned(),
+                _ => format!("Time is up!"),
             });
 
             // start / stop button
