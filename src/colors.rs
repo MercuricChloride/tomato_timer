@@ -1,7 +1,7 @@
 use egui::Color32;
 
-pub const green: Color32 = egui::Color32::from_rgb(96, 211, 148);
-pub const red: Color32 = egui::Color32::from_rgb(238, 96, 85);
+pub const GREEN: Color32 = egui::Color32::from_rgb(96, 211, 148);
+pub const RED: Color32 = egui::Color32::from_rgb(238, 96, 85);
 
 // SAMPLE CODE FOR CHANGING WIDGET COLORS
 // style.visuals.widgets = egui::style::Widgets {

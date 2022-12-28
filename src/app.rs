@@ -3,15 +3,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::colors::{green, red};
+use crate::colors::{GREEN, RED};
 use crate::sounds::{finish_sound, start_sound};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // #[serde(skip)]
-    // timer: Timer,
     time_per_round: f32,
     time_per_break: f32,
     start_time: SystemTime,
@@ -50,7 +48,6 @@ impl TemplateApp {
         let mut style: egui::Style = (*cc.egui_ctx.style()).clone();
 
         style.visuals.override_text_color = Some(egui::Color32::WHITE);
-        // style.visuals.panel_fill = green;
 
         cc.egui_ctx.set_style(style);
 
@@ -86,12 +83,13 @@ impl eframe::App for TemplateApp {
         match status {
             Some(TimerStatus::Running) => {
                 let mut style: egui::Style = (*ctx.style()).clone();
-                style.visuals.panel_fill = red;
+                style.visuals.panel_fill = RED;
                 ctx.set_style(style);
             }
+
             _ => {
                 let mut style: egui::Style = (*ctx.style()).clone();
-                style.visuals.panel_fill = green;
+                style.visuals.panel_fill = GREEN;
                 ctx.set_style(style);
             }
         }
