@@ -3,6 +3,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::colors::{green, red};
 use crate::sounds::{finish_sound, start_sound};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -47,28 +48,10 @@ impl TemplateApp {
 
         // custom styling
         let mut style: egui::Style = (*cc.egui_ctx.style()).clone();
-        // style.spacing.item_spacing = egui::vec2(10.0, 20.0);
-        style.visuals.panel_fill = egui::Color32::from_rgb(5, 130, 202);
 
-        style.visuals.widgets = egui::style::Widgets {
-            noninteractive: egui::style::WidgetVisuals {
-                bg_fill: egui::Color32::from_rgb(0, 100, 148),
-                bg_stroke: egui::Stroke::new(1.0, egui::Color32::BLACK),
-                rounding: egui::Rounding::default(),
-                fg_stroke: egui::Stroke::new(3.0, egui::Color32::BLACK),
-                expansion: 0.0,
-            },
-            inactive: egui::style::WidgetVisuals {
-                bg_fill: egui::Color32::from_rgb(0, 53, 84),
-                bg_stroke: egui::Stroke::new(1.0, egui::Color32::BLACK),
-                rounding: egui::Rounding::default(),
-                fg_stroke: egui::Stroke::new(1.0, egui::Color32::WHITE),
-                expansion: 0.0,
-            },
-            ..Default::default()
-        };
+        style.visuals.override_text_color = Some(egui::Color32::BLACK);
+        // style.visuals.panel_fill = green;
 
-        //212, 193, 236
         cc.egui_ctx.set_style(style);
 
         // Load previous app state (if any).
@@ -99,6 +82,19 @@ impl eframe::App for TemplateApp {
         } = self;
 
         ctx.request_repaint_after(Duration::from_millis(10)); // request a repaint every 10 ms
+
+        match status {
+            Some(TimerStatus::Running) => {
+                let mut style: egui::Style = (*ctx.style()).clone();
+                style.visuals.panel_fill = red;
+                ctx.set_style(style);
+            }
+            _ => {
+                let mut style: egui::Style = (*ctx.style()).clone();
+                style.visuals.panel_fill = green;
+                ctx.set_style(style);
+            }
+        }
 
         // main window
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -150,10 +146,13 @@ impl eframe::App for TemplateApp {
                         });
                     } else {
                         notifica::notify("Time is up!", "Take a break").unwrap();
+
                         thread::spawn(|| {
                             finish_sound();
                         });
+
                         *total_time += elapsed_time as u128; // add the elapsed work time to the total working time
+
                         *status = Some(TimerStatus::Break(current_time));
                     }
                 }
@@ -169,9 +168,11 @@ impl eframe::App for TemplateApp {
                         });
                     } else {
                         notifica::notify("Back to work!", "Start focusing again :)").unwrap();
+
                         thread::spawn(|| {
                             start_sound();
                         });
+
                         *status = Some(TimerStatus::Running);
                     }
                 }
