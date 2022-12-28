@@ -92,9 +92,9 @@ impl eframe::App for TomatoTimer {
 
         // main window
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Task Timer");
+            ui.heading("Tomato Timer 🍅⏰");
 
-            ui.label(format!("Deep Work Session Count: {}", session_count));
+            ui.label(format!("Deep Work Count: {}", session_count));
 
             ui.separator();
 
