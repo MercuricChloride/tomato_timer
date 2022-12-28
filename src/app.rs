@@ -6,38 +6,38 @@ use std::{
 use crate::colors::{GREEN, RED};
 use crate::sounds::{finish_sound, start_sound};
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+/// The tomato timer data structure. We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct TomatoTimer {
     time_per_round: f32,
     time_per_break: f32,
     start_time: SystemTime,
-    total_time: u128, // total time logged in the app
-    #[serde(skip)]
-    status: Option<TimerStatus>,
+    session_count: i32,
+    #[serde(skip)] // don't persist this field
+    status: TimerStatus,
 }
 
 #[derive(Debug)]
 enum TimerStatus {
     Running,
-    Break(SystemTime), // time when break started
+    Break(SystemTime), // time when break startedz
     Stopped,
 }
 
-impl Default for TemplateApp {
+impl Default for TomatoTimer {
     fn default() -> Self {
         Self {
             time_per_round: 25.0,
             time_per_break: 5.0,
-            total_time: 0,
+            session_count: 0,
             start_time: SystemTime::now(),
-            status: Some(TimerStatus::Stopped),
+            status: TimerStatus::Stopped,
         }
     }
 }
 
-impl TemplateApp {
+impl TomatoTimer {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -61,7 +61,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for TomatoTimer {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -73,30 +73,28 @@ impl eframe::App for TemplateApp {
         let Self {
             time_per_round,
             time_per_break,
-            total_time,
             start_time,
+            session_count,
             status,
         } = self;
 
         ctx.request_repaint_after(Duration::from_millis(10)); // request a repaint every 10 ms
 
-        match status {
-            Some(TimerStatus::Running) => {
-                let mut style: egui::Style = (*ctx.style()).clone();
-                style.visuals.panel_fill = RED;
-                ctx.set_style(style);
-            }
-
-            _ => {
-                let mut style: egui::Style = (*ctx.style()).clone();
-                style.visuals.panel_fill = GREEN;
-                ctx.set_style(style);
-            }
+        if let TimerStatus::Running = status {
+            let mut style: egui::Style = (*ctx.style()).clone();
+            style.visuals.panel_fill = RED;
+            ctx.set_style(style);
+        } else {
+            let mut style: egui::Style = (*ctx.style()).clone();
+            style.visuals.panel_fill = GREEN;
+            ctx.set_style(style);
         }
 
         // main window
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Task Timer");
+
+            ui.label(format!("Deep Work Session Count: {}", session_count));
 
             ui.separator();
 
@@ -106,72 +104,63 @@ impl eframe::App for TemplateApp {
             let current_time = SystemTime::now();
 
             let elapsed_time = match status {
-                Some(TimerStatus::Running) => current_time
+                TimerStatus::Running => current_time
                     .duration_since(*start_time)
                     .unwrap()
                     .as_secs_f32(),
-
-                Some(TimerStatus::Break(start)) => {
-                    current_time.duration_since(*start).unwrap().as_secs_f32()
-                }
-
+                TimerStatus::Break(break_start) => current_time
+                    .duration_since(*break_start)
+                    .unwrap()
+                    .as_secs_f32(),
                 _ => 0.0,
             };
 
-            let remaining_time = match status {
-                Some(TimerStatus::Running) => (*time_per_round * 60.0) - elapsed_time,
+            let is_round_complete = match status {
+                TimerStatus::Running => elapsed_time > (*time_per_round * 60.0),
+                TimerStatus::Break(_) => elapsed_time > (*time_per_break * 60.0),
+                _ => false,
+            };
 
-                Some(TimerStatus::Break(_)) => (*time_per_break * 60.0) - elapsed_time,
+            let remaining_time = match status {
+                TimerStatus::Running => (*time_per_round * 60.0) - elapsed_time,
+
+                TimerStatus::Break(_) => (*time_per_break * 60.0) - elapsed_time,
 
                 _ => 0.0,
             };
 
             let button_text = match status {
-                Some(TimerStatus::Running | TimerStatus::Break(_)) => "Stop Round",
+                TimerStatus::Running | TimerStatus::Break(_) => "Stop Round",
                 _ => "Start Round",
             };
 
             // main timer logic and actions
             match status {
-                // if we have time remaining in the round, show the timer
                 // if we have no time remaining, show a notification, play a sound, and switch to break mode
-                Some(TimerStatus::Running) => {
-                    if remaining_time > 0.0 {
-                        ui.horizontal(|ui| {
-                            ui.add(egui::ProgressBar::new(
-                                remaining_time / (*time_per_round * 60.0),
-                            ));
-                        });
-                    } else {
+                TimerStatus::Running => {
+                    if is_round_complete {
                         notifica::notify("Time is up!", "Take a break").unwrap();
 
                         thread::spawn(|| {
                             finish_sound();
                         });
 
-                        *total_time += elapsed_time as u128; // add the elapsed work time to the total working time
+                        *session_count += 1;
 
-                        *status = Some(TimerStatus::Break(current_time));
+                        *status = TimerStatus::Break(current_time);
                     }
                 }
 
-                // if we have time remaining in the break, show the timer
-                // otherwise, switch to work mode
-                Some(TimerStatus::Break(_)) => {
-                    if remaining_time > 0.0 {
-                        ui.horizontal(|ui| {
-                            ui.add(egui::ProgressBar::new(
-                                remaining_time / (*time_per_break * 60.0),
-                            ));
-                        });
-                    } else {
+                // if we have no time remaining in the break, switch to work mode
+                TimerStatus::Break(_) => {
+                    if is_round_complete {
                         notifica::notify("Back to work!", "Start focusing again :)").unwrap();
 
                         thread::spawn(|| {
                             start_sound();
                         });
 
-                        *status = Some(TimerStatus::Running);
+                        *status = TimerStatus::Running;
                     }
                 }
 
@@ -192,25 +181,27 @@ impl eframe::App for TemplateApp {
             });
 
             // start / stop button
-            if ui.button(button_text).clicked() {
-                match status {
-                    Some(TimerStatus::Stopped) => {
-                        *start_time = current_time;
-                        *status = Some(TimerStatus::Running);
-                        thread::spawn(|| {
-                            start_sound();
-                        });
-                    }
-                    _ => {
-                        *status = Some(TimerStatus::Stopped);
+
+            ui.horizontal(|ui| {
+                if ui.button(button_text).clicked() {
+                    match status {
+                        TimerStatus::Stopped => {
+                            *start_time = current_time;
+                            *status = TimerStatus::Running;
+                            thread::spawn(|| {
+                                start_sound();
+                            });
+                        }
+                        _ => {
+                            *start_time = current_time;
+                            *status = TimerStatus::Stopped;
+                        }
                     }
                 }
-            }
-
-            ui.heading(&format!(
-                "You have spent a total of {} minutes working, keep going!",
-                Duration::from_secs(*total_time as u64).as_secs_f32() / 60.0
-            ));
+                if ui.button("Reset Session Count").clicked() {
+                    *session_count = 0;
+                }
+            });
         });
     }
 }

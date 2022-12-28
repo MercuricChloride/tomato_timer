@@ -3,4 +3,4 @@
 mod app;
 mod colors;
 mod sounds;
-pub use app::TemplateApp;
+pub use app::TomatoTimer;
