@@ -3,25 +3,27 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::colors::{GREEN, RED};
-use crate::sounds::{finish_sound, start_sound};
+use crate::{colors::get_color_for_timer_status, display_time_remaining, get_remaining_time};
+use crate::{
+    get_is_round_complete,
+    sounds::{finish_sound, start_sound},
+};
 
 /// The tomato timer data structure. We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TomatoTimer {
-    time_per_round: f32,
-    time_per_break: f32,
-    start_time: SystemTime,
-    session_count: i32,
+    pub time_per_round: f32,
+    pub time_per_break: f32,
+    pub session_count: i32,
     #[serde(skip)] // don't persist this field
-    status: TimerStatus,
+    pub status: TimerStatus,
 }
 
 #[derive(Debug)]
-enum TimerStatus {
-    Running,
-    Break(SystemTime), // time when break startedz
+pub enum TimerStatus {
+    Running(SystemTime), // time when timer started
+    Break(SystemTime),   // time when break started
     Stopped,
 }
 
@@ -31,7 +33,6 @@ impl Default for TomatoTimer {
             time_per_round: 25.0,
             time_per_break: 5.0,
             session_count: 0,
-            start_time: SystemTime::now(),
             status: TimerStatus::Stopped,
         }
     }
@@ -73,22 +74,16 @@ impl eframe::App for TomatoTimer {
         let Self {
             time_per_round,
             time_per_break,
-            start_time,
             session_count,
             status,
         } = self;
 
         ctx.request_repaint_after(Duration::from_millis(10)); // request a repaint every 10 ms
 
-        if let TimerStatus::Running = status {
-            let mut style: egui::Style = (*ctx.style()).clone();
-            style.visuals.panel_fill = RED;
-            ctx.set_style(style);
-        } else {
-            let mut style: egui::Style = (*ctx.style()).clone();
-            style.visuals.panel_fill = GREEN;
-            ctx.set_style(style);
-        }
+        // change the background color based on the timer status
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals.panel_fill = get_color_for_timer_status(status);
+        ctx.set_style(style);
 
         // main window
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -98,46 +93,24 @@ impl eframe::App for TomatoTimer {
 
             ui.separator();
 
-            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Minutes per round"));
-            ui.add(egui::Slider::new(time_per_break, 0.0..=60.0).text("Minutes per break"));
+            ui.add(egui::Slider::new(time_per_round, 1.0..=60.0).text("Minutes per round"));
+            ui.add(egui::Slider::new(time_per_break, 1.0..=60.0).text("Minutes per break"));
 
             let current_time = SystemTime::now();
 
-            let elapsed_time = match status {
-                TimerStatus::Running => current_time
-                    .duration_since(*start_time)
-                    .unwrap()
-                    .as_secs_f32(),
-                TimerStatus::Break(break_start) => current_time
-                    .duration_since(*break_start)
-                    .unwrap()
-                    .as_secs_f32(),
-                _ => 0.0,
-            };
+            let remaining_time = get_remaining_time(status, time_per_round, time_per_break);
 
-            let is_round_complete = match status {
-                TimerStatus::Running => elapsed_time > (*time_per_round * 60.0),
-                TimerStatus::Break(_) => elapsed_time > (*time_per_break * 60.0),
-                _ => false,
-            };
-
-            let remaining_time = match status {
-                TimerStatus::Running => (*time_per_round * 60.0) - elapsed_time,
-
-                TimerStatus::Break(_) => (*time_per_break * 60.0) - elapsed_time,
-
-                _ => 0.0,
-            };
+            let is_round_complete = get_is_round_complete(status, time_per_round, time_per_break);
 
             let button_text = match status {
-                TimerStatus::Running | TimerStatus::Break(_) => "Stop Round",
+                TimerStatus::Running(_) | TimerStatus::Break(_) => "Stop Round",
                 _ => "Start Round",
             };
 
             // main timer logic and actions
             match status {
                 // if we have no time remaining, show a notification, play a sound, and switch to break mode
-                TimerStatus::Running => {
+                TimerStatus::Running(_) => {
                     if is_round_complete {
                         notifica::notify("Time is up!", "Take a break").unwrap();
 
@@ -160,42 +133,25 @@ impl eframe::App for TomatoTimer {
                             start_sound();
                         });
 
-                        *status = TimerStatus::Running;
+                        *status = TimerStatus::Running(current_time);
                     }
                 }
 
                 _ => {} // do nothing if we're stopped
             }
 
-            // time remaining label
-            ui.heading(match remaining_time as u32 {
-                60..=u32::MAX => format!(
-                    "{} Minutes left in round",
-                    (Duration::from_secs_f32(remaining_time).as_secs() / 60) + 1
-                ),
-                1..=59 => format!(
-                    "{} Seconds left in round",
-                    Duration::from_secs_f32(remaining_time).as_secs()
-                ),
-                _ => format!("Time is up!"),
-            });
+            ui.heading(display_time_remaining(remaining_time));
 
             // start / stop button
-
             ui.horizontal(|ui| {
                 if ui.button(button_text).clicked() {
-                    match status {
-                        TimerStatus::Stopped => {
-                            *start_time = current_time;
-                            *status = TimerStatus::Running;
-                            thread::spawn(|| {
-                                start_sound();
-                            });
-                        }
-                        _ => {
-                            *start_time = current_time;
-                            *status = TimerStatus::Stopped;
-                        }
+                    if let TimerStatus::Stopped = status {
+                        *status = TimerStatus::Running(current_time);
+                        thread::spawn(|| {
+                            start_sound();
+                        });
+                    } else {
+                        *status = TimerStatus::Stopped;
                     }
                 }
                 if ui.button("Reset Session Count").clicked() {
