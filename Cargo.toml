@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Alexander Gusev<alexandergusev46@gmail.com>"]
 edition = "2021"
 rust-version = "1.66"
+description = "A simple tomato timer"
+license = "GPL-3.0-or-later"
 
 
 [dependencies]

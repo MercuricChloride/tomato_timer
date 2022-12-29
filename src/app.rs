@@ -98,8 +98,8 @@ impl eframe::App for TomatoTimer {
 
             ui.separator();
 
-            ui.add(egui::Slider::new(time_per_round, 1.0..=60.0).text("Minutes per round"));
-            ui.add(egui::Slider::new(time_per_break, 1.0..=60.0).text("Minutes per break"));
+            ui.add(egui::Slider::new(time_per_round, 0.0..=60.0).text("Minutes per round"));
+            ui.add(egui::Slider::new(time_per_break, 0.0..=60.0).text("Minutes per break"));
 
             let current_time = SystemTime::now();
 
