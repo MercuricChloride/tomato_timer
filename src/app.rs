@@ -4,10 +4,7 @@ use std::{
 };
 
 use crate::{colors::get_color_for_timer_status, display_time_remaining, get_remaining_time};
-use crate::{
-    get_is_round_complete, handle_round_complete,
-    sounds::{finish_sound, start_sound},
-};
+use crate::{get_is_round_complete, handle_round_complete, sounds::start_sound};
 
 /// The tomato timer data structure. We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
