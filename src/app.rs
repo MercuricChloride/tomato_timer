@@ -5,7 +5,7 @@ use std::{
 
 use crate::{colors::get_color_for_timer_status, display_time_remaining, get_remaining_time};
 use crate::{
-    get_is_round_complete,
+    get_is_round_complete, handle_round_complete,
     sounds::{finish_sound, start_sound},
 };
 
@@ -107,39 +107,10 @@ impl eframe::App for TomatoTimer {
                 _ => "Start Round",
             };
 
+            // function to handle the round timer logic
+            handle_round_complete(status, is_round_complete);
+
             // main timer logic and actions
-            match status {
-                // if we have no time remaining, show a notification, play a sound, and switch to break mode
-                TimerStatus::Running(_) => {
-                    if is_round_complete {
-                        notifica::notify("Time is up!", "Take a break").unwrap();
-
-                        thread::spawn(|| {
-                            finish_sound();
-                        });
-
-                        *session_count += 1;
-
-                        *status = TimerStatus::Break(current_time);
-                    }
-                }
-
-                // if we have no time remaining in the break, switch to work mode
-                TimerStatus::Break(_) => {
-                    if is_round_complete {
-                        notifica::notify("Back to work!", "Start focusing again :)").unwrap();
-
-                        thread::spawn(|| {
-                            start_sound();
-                        });
-
-                        *status = TimerStatus::Running(current_time);
-                    }
-                }
-
-                _ => {} // do nothing if we're stopped
-            }
-
             ui.heading(display_time_remaining(remaining_time));
 
             // start / stop button

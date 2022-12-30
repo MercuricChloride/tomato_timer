@@ -3,7 +3,11 @@
 mod app;
 mod colors;
 mod sounds;
-use std::time::{Duration, SystemTime};
+use sounds::{finish_sound, start_sound};
+use std::{
+    thread,
+    time::{Duration, SystemTime},
+};
 
 pub use app::{TimerStatus, TomatoTimer};
 
@@ -38,6 +42,29 @@ pub fn get_is_round_complete(
 ) -> bool {
     let remaining_time = get_remaining_time(status, time_per_round, time_per_break);
     remaining_time <= 0.0
+}
+
+pub fn handle_round_complete(status: &mut TimerStatus, round_complete: bool) {
+    if round_complete {
+        match status {
+            TimerStatus::Running(_) => {
+                notifica::notify("Time is up!", "Take a break").expect("Failed to notify");
+                *status = TimerStatus::Break(SystemTime::now());
+                thread::spawn(|| {
+                    finish_sound();
+                });
+            }
+            TimerStatus::Break(_) => {
+                notifica::notify("Back to work!", "Start focusing again :)")
+                    .expect("Failed to notify");
+                *status = TimerStatus::Running(SystemTime::now());
+                thread::spawn(|| {
+                    start_sound();
+                });
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn display_time_remaining(remaining_time: f32) -> String {
